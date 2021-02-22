@@ -140,7 +140,11 @@ class PythonSDKBuilder(PythonWriter):
         for param in body_kwargs:
             if param['name'] in self.inherited_properties:
                 continue
-            string +=param['name'] + ', '
+            string +=param['name']
+            default_parameter = self.get_default_value_in_param(param)
+            if default_parameter is not None:
+                string += "=" + str(default_parameter)
+            string +=  ', '
         string += '**kwargs):\n'
         self.indent_level += 1
         string += self.add_indent() + f"""return requests.get(\n"""
@@ -153,13 +157,13 @@ class PythonSDKBuilder(PythonWriter):
             default_parameter = self.get_default_value_in_param(param)
             if default_parameter is not None:
                 default_arguments.append(default_parameter)
-                continue
+                string += self.add_indent() + param['name'] + '=' + param['name'] + ', '
             elif param['name'] in self.inherited_properties:
                 string += self.add_indent() + param['name'] + '=' + 'self.' + param['name'] + ', '
             else:
                 string += self.add_indent() + param['name'] + '=' + param['name'] + ', '
             string += '\n'
-        string += self.add_indent() + '**kwargs))'
+        string += self.add_indent() + '))'
         if include_response_parsing:
             string += self.response_type_dict[self.get_response_type(endpoint)]
         self.indent_level -= 3
@@ -174,7 +178,11 @@ class PythonSDKBuilder(PythonWriter):
         for k, v in body_kwargs:
             if k in self.inherited_properties:
                 continue
-            string += k + ', '
+            string += k
+            default_parameter = self.get_default_value_in_param(v)
+            if default_parameter is not None:
+                string += "=" + str(default_parameter)
+            string += ', '
         string += '):\n'
         self.indent_level += 1
         string += self.add_indent() + '"""' + self.create_documentation(endpoint) + '"""\n'
