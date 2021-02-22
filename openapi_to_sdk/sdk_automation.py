@@ -134,6 +134,7 @@ class PythonSDKBuilder(PythonWriter):
             string += "@" + decorator + '\n'
         return string
     
+    @property
     def internal_function_prefix(self):
         return "_"
 
