@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 name = 'openapi_to_sdk'
-version = '0.1.0'
+version = '0.1.1'
 
 setup(
     name=name,

@@ -24,6 +24,8 @@ class PythonWriter:
         if not isinstance(import_strings, list):
             raise ValueError("Imports need to be in the format: ['import vectorai']")
         with open(filename, 'a') as f:
+            f.write("import requests\n")
+        with open(filename, 'a') as f:
             for import_str in import_strings:
                 f.write(import_str)
                 f.write('\n')
