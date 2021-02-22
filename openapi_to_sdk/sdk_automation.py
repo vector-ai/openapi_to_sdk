@@ -211,7 +211,7 @@ class PythonSDKBuilder(PythonWriter):
             string += ', '
         for k, default_param_string in default_parameters.items():
             string += k + "=" + default_param_string + ', '
-        string += '):\n'
+        string += '**kwargs):\n'
         self.indent_level += 1
         string += self.add_indent() + '"""' + self.create_documentation(endpoint) + '"""\n'
         string += self.add_indent() + f"""return requests.post(\n"""
