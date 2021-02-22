@@ -72,15 +72,16 @@ class PythonSDKBuilder(PythonWriter):
     def get_request_func(self, endpoint_metadata):
         return getattr(requests, self.get_request_type(endpoint_metadata))
     
-    def create_endpoint_metadata_string(self, endpoint, include_response_parsing=False):
-        endpoint_metadata_name = endpoint.split('/')[-1]
+    def create_endpoint_metadata_string(self, endpoint, include_response_parsing=False, internal_functions=[]):
+        function_name = endpoint.split('/')[-1]
         endpoint_metadata = self.data['paths'][endpoint]
         body_kwargs = self.get_body_kwargs(endpoint_metadata)
+        is_internal_function = function_name in internal_functions
         return self.get_request_template(
-            endpoint_metadata_name, 
+            function_name, 
             endpoint, 
             self.get_request_type(endpoint_metadata), body_kwargs,
-            include_response_parsing)
+            include_response_parsing, is_internal_function=is_internal_function)
         
     def get_body_kwargs(self, endpoint_metadata):
         if self.get_request_type(endpoint_metadata) == 'post':
@@ -89,14 +90,14 @@ class PythonSDKBuilder(PythonWriter):
             return self.get_body_info(endpoint_metadata)
     
     def get_request_template(self, endpoint_metadata_name, endpoint, endpoint_metadata_type, 
-    body_kwargs, include_response_parsing):
+    body_kwargs, include_response_parsing: bool, is_internal_function: bool):
         decorator_string = self.get_decorator_string()
         if endpoint_metadata_type == 'post':
             return decorator_string + self.get_request_post_template(endpoint_metadata_name, 
-            endpoint, body_kwargs, include_response_parsing)[0]
+            endpoint, body_kwargs, include_response_parsing, is_internal_function)[0]
         elif endpoint_metadata_type == 'get':
             return decorator_string + self.get_request_get_template(endpoint_metadata_name, 
-            endpoint, body_kwargs, include_response_parsing)[0]
+            endpoint, body_kwargs, include_response_parsing, is_internal_function)[0]
 
     def create_documentation(self, endpoint):
         documentation = ''
@@ -133,10 +134,15 @@ class PythonSDKBuilder(PythonWriter):
             string += "@" + decorator + '\n'
         return string
     
+    def internal_function_prefix(self):
+        return "_"
 
     def get_request_get_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
-    include_response_parsing: bool=False):
-        string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
+    include_response_parsing: bool=False, is_internal_function: bool=False):
+        string = self.add_indent() + f"""def """
+        if is_internal_function:
+            string += self.internal_function_prefix
+        string += f"""{endpoint_metadata_name}(self,"""
         # store default parameters to add them later.
         default_parameters = {}
         for param in body_kwargs:
@@ -181,7 +187,12 @@ class PythonSDKBuilder(PythonWriter):
     def indenter(self):
         return '\t'
     
-    def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs, include_response_parsing=False):
+    def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
+    include_response_parsing=False, is_internal_function: bool=False):
+        string = self.add_indent() + f"""def """
+        if is_internal_function:
+            string += self.internal_function_prefix
+        string += f"""{endpoint_metadata_name}(self,"""
         string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
         # Store default parameters so you can add them last
         default_parameters = {}
@@ -253,7 +264,13 @@ class PythonSDKBuilder(PythonWriter):
             endpoint_metadatas_dict.update({new_func.__name__: func_string})
         return endpoint_metadatas_dict
 
-    def to_python_file(self, class_name, filename='api.py', import_strings=[], include_response_parsing=True):
+    def to_python_file(self, class_name, filename='api.py', import_strings=[], include_response_parsing=True, 
+    internal_functions=[]):
+        """
+        Args:
+            class_name: THe name of the class
+            internal_functions: The name of the internal functions
+        """
         self.write_header(filename)
         self.write_imports(filename, import_strings)
         self.write_constructor(filename, class_name=class_name, inherited_properties=self.inherited_properties)
@@ -261,8 +278,11 @@ class PythonSDKBuilder(PythonWriter):
         endpoint_metadatas_dict = {}
         func_strings = []
         for path in self.data['paths'].keys():
-            func_string = self.create_endpoint_metadata_string(path, 
-            include_response_parsing=include_response_parsing)
+            func_string = self.create_endpoint_metadata_string(
+                path, 
+                include_response_parsing=include_response_parsing,
+                internal_functions=internal_functions
+            )
             func_strings.append(func_string)
         self.write_python_instance_methods(func_strings, filename=filename)
     
