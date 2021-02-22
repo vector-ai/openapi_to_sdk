@@ -137,14 +137,22 @@ class PythonSDKBuilder(PythonWriter):
     def get_request_get_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
     include_response_parsing: bool=False):
         string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
+        # store default parameters to add them later.
+        default_parameters = {}
         for param in body_kwargs:
             if param['name'] in self.inherited_properties:
                 continue
-            string +=param['name']
             default_parameter = self.get_default_value_in_param(param)
             if default_parameter is not None:
-                string += "=" + str(default_parameter)
+                if isinstance(default_parameter, str):
+                    default_parameter = '"' + str(default_parameter) + '"'
+                # string += "=" + str(default_parameter)
+                default_parameters[param['name']] = str(default_parameter)
+                continue
+            string +=param['name']
             string +=  ', '
+        for k, default_parameter_string in default_parameters.items():
+            string += k + '=' + str(default_parameter_string) + ', '
         string += '**kwargs):\n'
         self.indent_level += 1
         string += self.add_indent() + f"""return requests.get(\n"""
@@ -175,14 +183,22 @@ class PythonSDKBuilder(PythonWriter):
     
     def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs, include_response_parsing=False):
         string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
+        # Store default parameters so you can add them last
+        default_parameters = {}
         for k, v in body_kwargs:
             if k in self.inherited_properties:
                 continue
-            string += k
             default_parameter = self.get_default_value_in_param(v)
             if default_parameter is not None:
-                string += "=" + str(default_parameter)
+                if isinstance(default_parameter, str):
+                    default_parameter = '"' + str(default_parameter) + '"'
+                # string += "=" + str(default_parameter)
+                default_parameters[k] = str(default_parameter)
+                continue
+            string += k
             string += ', '
+        for k, default_param_string in default_parameters.items():
+            string += k + "=" + default_param_string + ', '
         string += '):\n'
         self.indent_level += 1
         string += self.add_indent() + '"""' + self.create_documentation(endpoint) + '"""\n'
