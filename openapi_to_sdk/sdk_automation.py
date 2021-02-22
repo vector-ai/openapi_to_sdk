@@ -130,8 +130,11 @@ class PythonSDKBuilder(PythonWriter):
 
     def get_decorator_string(self):
         string = ''
-        for decorator in self.decorators:
-            string += "@" + decorator + '\n'
+        for i, decorator in enumerate(self.decorators):
+            if i == 0:
+                string += "@" + decorator + '\n'
+            else:
+                string += self.add_indent() + "@" + decorator + '\n'
         return string
     
     @property
