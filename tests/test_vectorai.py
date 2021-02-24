@@ -18,6 +18,7 @@ def test_smoke():
         decorators=[
             # 'retry()', 
             "return_curl_or_response('json')"],
+        override_param_defaults={'min_score':None},
     )
     sdk.to_python_file(
         class_name="ViAPIClient", 
@@ -27,7 +28,8 @@ def test_smoke():
             "list_collections",
             "create_collection",
             "search"
-        ]
+        ],
+        include_response_parsing=False
     )
 
 def test_import():

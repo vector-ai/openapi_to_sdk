@@ -8,11 +8,13 @@ from .writer import PythonWriter
 
 class PythonSDKBuilder(PythonWriter):
     def __init__(self, url: str='', sample_endpoint: str='', 
-    inherited_properties: List[str]=[], json_fn: str=None, decorators: Dict[str, str]={}):
+    inherited_properties: List[str]=[], json_fn: str=None, 
+    decorators: Dict[str, str]={}, override_param_defaults={}):
         """
         Args:
             url: 
             Sample endpoint: Endpoint for quick testing 
+            override_param_defaults: Override param defaults in SDK
         """
         self.sample_endpoint = sample_endpoint
         self.url = url
@@ -23,6 +25,7 @@ class PythonSDKBuilder(PythonWriter):
         self.inherited_properties = inherited_properties
         self.decorators = decorators
         self.indent_level = 0
+        self.override_param_defaults=override_param_defaults
     
     def _download_json(self):
         return requests.get(self.url + "/openapi.json").json()
@@ -121,12 +124,31 @@ class PythonSDKBuilder(PythonWriter):
         documentation += '\n'
         return documentation
 
+    def get_default_value_from_override(self, param):
+        if 'title' in param.keys():
+            if param['title'] in self.override_param_defaults:
+                return self.override_param_defaults[param['title']]
+        if 'name' in param.keys():
+            if param['name'] in self.override_param_defaults:
+                return self.override_param_defaults[param['name']]
+        return self.missing_value
+
     def get_default_value_in_param(self, param):
+        default_value = self.get_default_value_from_override(param)
+        if default_value != self.missing_value:
+            return default_value
         if 'default' in param.keys():
             return param['default']
         if 'schema' in param.keys():
             if 'default' in param['schema']:
                 return param['schema']['default']
+            # if 'minimum' in param['schema']:
+            #     return param['schema']['minimum']
+        return self.missing_value
+    
+    @property
+    def missing_value(self):
+        return -99999
 
     def get_decorator_string(self):
         string = ''
@@ -153,7 +175,7 @@ class PythonSDKBuilder(PythonWriter):
             if param['name'] in self.inherited_properties:
                 continue
             default_parameter = self.get_default_value_in_param(param)
-            if default_parameter is not None:
+            if default_parameter != self.missing_value:
                 if isinstance(default_parameter, str):
                     default_parameter = '"' + str(default_parameter) + '"'
                 # string += "=" + str(default_parameter)
@@ -173,7 +195,7 @@ class PythonSDKBuilder(PythonWriter):
         default_arguments = []
         for param in body_kwargs:
             default_parameter = self.get_default_value_in_param(param)
-            if default_parameter is not None:
+            if default_parameter != self.missing_value:
                 default_arguments.append(default_parameter)
                 string += self.add_indent() + param['name'] + '=' + param['name'] + ', '
             elif param['name'] in self.inherited_properties:
@@ -204,7 +226,7 @@ class PythonSDKBuilder(PythonWriter):
             if k in self.inherited_properties:
                 continue
             default_parameter = self.get_default_value_in_param(v)
-            if default_parameter is not None:
+            if default_parameter != self.missing_value:
                 if isinstance(default_parameter, str):
                     default_parameter = '"' + str(default_parameter) + '"'
                 # string += "=" + str(default_parameter)
