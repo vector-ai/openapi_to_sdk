@@ -9,7 +9,8 @@ from .writer import PythonWriter
 class PythonSDKBuilder(PythonWriter):
     def __init__(self, url: str='', sample_endpoint: str='', 
     inherited_properties: List[str]=[], json_fn: str=None, 
-    decorators: Dict[str, str]={}, override_param_defaults={}):
+    decorators: Dict[str, str]={}, override_param_defaults={}, 
+    internal_functions: set={}):
         """
         Args:
             url: 
@@ -26,6 +27,7 @@ class PythonSDKBuilder(PythonWriter):
         self.decorators = decorators
         self.indent_level = 0
         self.override_param_defaults=override_param_defaults
+        self.internal_functions = internal_functions
     
     def _download_json(self):
         return requests.get(self.url + "/openapi.json").json()
@@ -75,16 +77,15 @@ class PythonSDKBuilder(PythonWriter):
     def get_request_func(self, endpoint_metadata):
         return getattr(requests, self.get_request_type(endpoint_metadata))
     
-    def create_endpoint_metadata_string(self, endpoint, include_response_parsing=False, internal_functions=[]):
+    def create_endpoint_metadata_string(self, endpoint, include_response_parsing=False):
         function_name = endpoint.split('/')[-1]
         endpoint_metadata = self.data['paths'][endpoint]
         body_kwargs = self.get_body_kwargs(endpoint_metadata)
-        is_internal_function = function_name in internal_functions
         return self.get_request_template(
             function_name, 
             endpoint, 
             self.get_request_type(endpoint_metadata), body_kwargs,
-            include_response_parsing, is_internal_function=is_internal_function)
+            include_response_parsing)
         
     def get_body_kwargs(self, endpoint_metadata):
         if self.get_request_type(endpoint_metadata) == 'post':
@@ -93,14 +94,14 @@ class PythonSDKBuilder(PythonWriter):
             return self.get_body_info(endpoint_metadata)
     
     def get_request_template(self, endpoint_metadata_name, endpoint, endpoint_metadata_type, 
-    body_kwargs, include_response_parsing: bool, is_internal_function: bool):
+    body_kwargs, include_response_parsing: bool):
         decorator_string = self.get_decorator_string()
         if endpoint_metadata_type == 'post':
             return decorator_string + self.get_request_post_template(endpoint_metadata_name, 
-            endpoint, body_kwargs, include_response_parsing, is_internal_function)[0]
+            endpoint, body_kwargs, include_response_parsing)[0]
         elif endpoint_metadata_type == 'get':
             return decorator_string + self.get_request_get_template(endpoint_metadata_name, 
-            endpoint, body_kwargs, include_response_parsing, is_internal_function)[0]
+            endpoint, body_kwargs, include_response_parsing)[0]
 
     def create_documentation(self, endpoint):
         documentation = ''
@@ -132,8 +133,13 @@ class PythonSDKBuilder(PythonWriter):
             if param['name'] in self.override_param_defaults:
                 return self.override_param_defaults[param['name']]
         return self.missing_value
+    
+    def get_default_value_from_override_by_param_name(self, param_name: str):
+        if param_name in self.override_param_defaults.keys():
+            return self.override_param_defaults[param_name]
+        return self.missing_value
 
-    def get_default_value_in_param(self, param):
+    def get_default_value_in_param(self, param=None):
         default_value = self.get_default_value_from_override(param)
         if default_value != self.missing_value:
             return default_value
@@ -142,8 +148,6 @@ class PythonSDKBuilder(PythonWriter):
         if 'schema' in param.keys():
             if 'default' in param['schema']:
                 return param['schema']['default']
-            # if 'minimum' in param['schema']:
-            #     return param['schema']['minimum']
         return self.missing_value
     
     @property
@@ -164,8 +168,9 @@ class PythonSDKBuilder(PythonWriter):
         return "_"
 
     def get_request_get_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
-    include_response_parsing: bool=False, is_internal_function: bool=False):
+    include_response_parsing: bool=False):
         string = self.add_indent() + f"""def """
+        is_internal_function = endpoint_metadata_name in self.internal_functions
         if is_internal_function:
             string += self.internal_function_prefix
         string += f"""{endpoint_metadata_name}(self,"""
@@ -214,18 +219,22 @@ class PythonSDKBuilder(PythonWriter):
         return '\t'
     
     def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
-    include_response_parsing=False, is_internal_function: bool=False):
+    include_response_parsing=False):
         string = self.add_indent() + f"""def """
+        is_internal_function = endpoint_metadata_name in self.internal_functions
         if is_internal_function:
             string += self.internal_function_prefix
-        string += f"""{endpoint_metadata_name}(self,"""
-        string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
+        string += f"""{endpoint_metadata_name}(self, """
+        # string = self.add_indent() + f"""def {endpoint_metadata_name}(self,"""
         # Store default parameters so you can add them last
         default_parameters = {}
         for k, v in body_kwargs:
             if k in self.inherited_properties:
                 continue
-            default_parameter = self.get_default_value_in_param(v)
+            if k in self.override_param_defaults.keys():
+                default_parameter = self.get_default_value_from_override_by_param_name(k)
+            else:
+                default_parameter = self.get_default_value_in_param(v)
             if default_parameter != self.missing_value:
                 if isinstance(default_parameter, str):
                     default_parameter = '"' + str(default_parameter) + '"'
@@ -248,7 +257,7 @@ class PythonSDKBuilder(PythonWriter):
         for k, v in body_kwargs:
             if 'default' in v.keys():
                 default_arguments.append(v['default'])
-                continue
+                string += self.add_indent() + k + '=' + k + ', '
             elif k in self.inherited_properties:
                 string += self.add_indent() + k + '=' + 'self.' + k + ','
             else:
@@ -290,8 +299,7 @@ class PythonSDKBuilder(PythonWriter):
             endpoint_metadatas_dict.update({new_func.__name__: func_string})
         return endpoint_metadatas_dict
 
-    def to_python_file(self, class_name, filename='api.py', import_strings=[], include_response_parsing=True, 
-    internal_functions=[]):
+    def to_python_file(self, class_name, filename='api.py', import_strings=[], include_response_parsing=True):
         """
         Args:
             class_name: THe name of the class
@@ -307,7 +315,6 @@ class PythonSDKBuilder(PythonWriter):
             func_string = self.create_endpoint_metadata_string(
                 path, 
                 include_response_parsing=include_response_parsing,
-                internal_functions=internal_functions
             )
             func_strings.append(func_string)
         self.write_python_instance_methods(func_strings, filename=filename)
