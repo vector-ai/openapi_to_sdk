@@ -263,7 +263,7 @@ class PythonSDKBuilder(PythonWriter):
             else:
                 string += self.add_indent() + k + '=' + k + ', '
             string += '\n'
-        string += self.add_indent() + '**kwargs))'
+        string += self.add_indent() + '))'
         if include_response_parsing:
             string += self.response_type_dict[self.get_response_type(endpoint)]
         self.indent_level = self.indent_level - 3
