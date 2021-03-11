@@ -194,7 +194,7 @@ class PythonSDKBuilder(PythonWriter):
         self.indent_level += 1
         string += self.add_indent() + f"""return requests.get(\n"""
         self.indent_level += 1
-        string += self.add_indent() + f"""url='{self.url + endpoint}',\n"""
+        string += self.add_indent() + f"""url=self.url+'{endpoint}',\n"""
         string += self.add_indent () + 'params=dict(\n'
         self.indent_level += 1
         default_arguments = []
@@ -250,7 +250,7 @@ class PythonSDKBuilder(PythonWriter):
         string += self.add_indent() + '"""' + self.create_documentation(endpoint) + '"""\n'
         string += self.add_indent() + f"""return requests.post(\n"""
         self.indent_level += 1
-        string += self.add_indent() + f"""url='{self.url + endpoint}',\n"""
+        string += self.add_indent() + f"""url=self.url+'{endpoint}',\n"""
         string += self.add_indent() + 'json=dict(\n'
         default_arguments = []
         self.indent_level += 1
