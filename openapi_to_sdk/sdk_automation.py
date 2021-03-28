@@ -7,14 +7,14 @@ from .function import create_function
 from .writer import PythonWriter
 
 class PythonSDKBuilder(PythonWriter):
-    def __init__(self, url: str='', sample_endpoint: str='', 
-    inherited_properties: List[str]=[], json_fn: str=None, 
-    decorators: Dict[str, str]={}, override_param_defaults={}, 
+    def __init__(self, url: str='', sample_endpoint: str='',
+    inherited_properties: List[str]=[], json_fn: str=None,
+    decorators: Dict[str, str]={}, override_param_defaults={},
     internal_functions: set={}):
         """
         Args:
-            url: 
-            Sample endpoint: Endpoint for quick testing 
+            url:
+            Sample endpoint: Endpoint for quick testing
             override_param_defaults: Override param defaults in SDK
         """
         self.sample_endpoint = sample_endpoint
@@ -28,17 +28,17 @@ class PythonSDKBuilder(PythonWriter):
         self.indent_level = 0
         self.override_param_defaults=override_param_defaults
         self.internal_functions = internal_functions
-    
+
     def _download_json(self):
         return requests.get(self.url + "/openapi.json").json()
-    
+
     @property
     def sample(self):
         return self.data['paths'][self.sample_endpoint]
 
     def get_request_type(self, endpoint_metadata):
         return self.get_field_value(endpoint_metadata)
-    
+
     def get_field_value(self, dictionary):
         return list(dictionary.keys())[0]
 
@@ -54,12 +54,15 @@ class PythonSDKBuilder(PythonWriter):
         if request_type == 'post':
             return body['requestBody']['content']['application/json']['schema']['$ref']
         elif request_type == 'get':
-            return body['parameters']
-     
+            if "parameters" in body.keys():
+                return body['parameters']
+            else:
+                return []
+
     def get_body_name(self, endpoint_metadata):
         request_body = self.get_request_body(endpoint_metadata)
         return request_body.split('/')[-1]
-    
+
     def get_body(self, endpoint_metadata):
         body_name = self.get_body_name(endpoint_metadata)
         return self.data['components']['schemas'][body_name]
@@ -69,38 +72,38 @@ class PythonSDKBuilder(PythonWriter):
             return self.get_body(endpoint_metadata)['properties']
         elif self.get_request_type(endpoint_metadata) == 'get':
             return self.get_params(endpoint_metadata)
-    
+
     def get_params(self, endpoint_metadata):
         response = self.get_request_body(endpoint_metadata)
         return response
-    
+
     def get_request_func(self, endpoint_metadata):
         return getattr(requests, self.get_request_type(endpoint_metadata))
-    
+
     def create_endpoint_metadata_string(self, endpoint, include_response_parsing=False):
         function_name = endpoint.split('/')[-1]
         endpoint_metadata = self.data['paths'][endpoint]
         body_kwargs = self.get_body_kwargs(endpoint_metadata)
         return self.get_request_template(
-            function_name, 
-            endpoint, 
+            function_name,
+            endpoint,
             self.get_request_type(endpoint_metadata), body_kwargs,
             include_response_parsing)
-        
+
     def get_body_kwargs(self, endpoint_metadata):
         if self.get_request_type(endpoint_metadata) == 'post':
             return list(self.get_body_info(endpoint_metadata).items())
         if self.get_request_type(endpoint_metadata) == 'get':
             return self.get_body_info(endpoint_metadata)
-    
-    def get_request_template(self, endpoint_metadata_name, endpoint, endpoint_metadata_type, 
+
+    def get_request_template(self, endpoint_metadata_name, endpoint, endpoint_metadata_type,
     body_kwargs, include_response_parsing: bool):
         decorator_string = self.get_decorator_string()
         if endpoint_metadata_type == 'post':
-            return decorator_string + self.get_request_post_template(endpoint_metadata_name, 
+            return decorator_string + self.get_request_post_template(endpoint_metadata_name,
             endpoint, body_kwargs, include_response_parsing)[0]
         elif endpoint_metadata_type == 'get':
-            return decorator_string + self.get_request_get_template(endpoint_metadata_name, 
+            return decorator_string + self.get_request_get_template(endpoint_metadata_name,
             endpoint, body_kwargs, include_response_parsing)[0]
 
     def create_documentation(self, endpoint):
@@ -133,7 +136,7 @@ class PythonSDKBuilder(PythonWriter):
             if param['name'] in self.override_param_defaults:
                 return self.override_param_defaults[param['name']]
         return self.missing_value
-    
+
     def get_default_value_from_override_by_param_name(self, param_name: str):
         if param_name in self.override_param_defaults.keys():
             return self.override_param_defaults[param_name]
@@ -149,7 +152,7 @@ class PythonSDKBuilder(PythonWriter):
             if 'default' in param['schema']:
                 return param['schema']['default']
         return self.missing_value
-    
+
     @property
     def missing_value(self):
         return -99999
@@ -162,12 +165,12 @@ class PythonSDKBuilder(PythonWriter):
             else:
                 string += self.add_indent() + "@" + decorator + '\n'
         return string
-    
+
     @property
     def internal_function_prefix(self):
         return "_"
 
-    def get_request_get_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
+    def get_request_get_template(self, endpoint_metadata_name, endpoint, body_kwargs,
     include_response_parsing: bool=False):
         string = self.add_indent() + f"""def """
         is_internal_function = endpoint_metadata_name in self.internal_functions
@@ -217,8 +220,8 @@ class PythonSDKBuilder(PythonWriter):
     @property
     def indenter(self):
         return '\t'
-    
-    def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs, 
+
+    def get_request_post_template(self, endpoint_metadata_name, endpoint, body_kwargs,
     include_response_parsing=False):
         string = self.add_indent() + f"""def """
         is_internal_function = endpoint_metadata_name in self.internal_functions
@@ -283,14 +286,14 @@ class PythonSDKBuilder(PythonWriter):
         return {
         'json': '.json()',
         'html': '.content'
-    }    
+    }
 
     def get_response_type(self, endpoint):
         if 'json' in list(self.get_response_content(endpoint).keys())[0]:
             return 'json'
         if 'html' in list(self.get_response_content(endpoint).keys())[0]:
             return 'html'
-    
+
     def create_function_string(self):
         endpoint_metadatas_dict = {}
         for path in self.data['paths'].keys():
@@ -313,12 +316,12 @@ class PythonSDKBuilder(PythonWriter):
         func_strings = []
         for path in self.data['paths'].keys():
             func_string = self.create_endpoint_metadata_string(
-                path, 
+                path,
                 include_response_parsing=include_response_parsing,
             )
             func_strings.append(func_string)
         self.write_python_instance_methods(func_strings, filename=filename)
-    
+
     def create_function_dict(self):
         endpoint_metadatas_dict = {}
         for path in self.data['paths'].keys():
