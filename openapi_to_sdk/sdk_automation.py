@@ -10,7 +10,7 @@ class PythonSDKBuilder(PythonWriter):
     def __init__(self, url: str='', sample_endpoint: str='',
     inherited_properties: List[str]=[], json_fn: str=None,
     decorators: Dict[str, str]={}, override_param_defaults={},
-    internal_functions: set={}):
+    internal_functions: set={}, skip_functions=[]):
         """
         Args:
             url:
@@ -28,6 +28,7 @@ class PythonSDKBuilder(PythonWriter):
         self.indent_level = 0
         self.override_param_defaults=override_param_defaults
         self.internal_functions = internal_functions
+        self.skip_functions = skip_functions
 
     def _download_json(self):
         return requests.get(self.url + "/openapi.json").json()
@@ -315,11 +316,13 @@ class PythonSDKBuilder(PythonWriter):
         endpoint_metadatas_dict = {}
         func_strings = []
         for path in self.data['paths'].keys():
-            func_string = self.create_endpoint_metadata_string(
-                path,
-                include_response_parsing=include_response_parsing,
-            )
-            func_strings.append(func_string)
+            func_name = path.split('/')[-1]
+            if func_name not in self.skip_functions:
+                func_string = self.create_endpoint_metadata_string(
+                    path,
+                    include_response_parsing=include_response_parsing,
+                )
+                func_strings.append(func_string)
         self.write_python_instance_methods(func_strings, filename=filename)
 
     def create_function_dict(self):
